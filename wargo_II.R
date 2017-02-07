@@ -14,6 +14,7 @@ allunique<-function(v){
   }
 }
 
+
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 
 endsWith<-function(str,patten){
@@ -76,6 +77,53 @@ triplevenn<-function(df1,df2,df3,venn_names,higher=FALSE,lower=FALSE){
                    category=category,col=col,cat.col=col)
 }
 
+hm<-function(expression,profile,design,contrast,filename1,filename2,filename3){
+#prepare DESeqdataset from Matrix
+    design<-deparse(substitute(design))
+  dds<-DESeqDataSetFromMatrix(countData = expression,colData=profile,design=as.formula(design))
+
+#combine repeated columns(duplicated sample)  
+  dds$sample<-profile$treatment
+  dds$run<-paste0("run",1:nrow(profile))
+  ddsColl<-collapseReplicates(dds,dds$sample,dds$run)
+#DESeq comparision and extract results
+  dds<-DESeq(ddsColl)
+  results<-results(dds,contrast=contrast)
+  results<-results[order(results$padj),]
+  results<-results[complete.cases(results),]
+  results<-results[(results$padj<=0.05)&(abs(results$log2FoldChange)>=1),]
+  write.csv(results,filename1)
+#Extract rlogized data for heatmap
+  rlog<-rlog(dds)
+  log_data<-assay(rlog)
+  log_data<-log_data[rownames(results),]
+  write.csv(log_data,filename2)
+  heatmap_data<-t(scale(t(log_data)))
+# preset the row and column cluster and order  
+  hr_dist<-dist(heatmap_data)
+  hr_clust<-hclust(hr_dist)
+  hr_dend<-as.dendrogram(hr_clust)
+  row_order<-order.dendrogram(hr_dend)
+  vt_dist<-dist(t(heatmap_data))
+  vt_clust<-hclust(vt_dist)
+  vt_dend<-as.dendrogram(vt_clust)
+  col_order<-order.dendrogram(vt_dend)
+#extract heatmap data with order exactly same as heatmap  
+  sorted_heatmap_data<-log_data[row_order,col_order]
+  write.csv(sorted_heatmap_data,filename3)
+  #prepare profile data for heatmap
+  profile_coll<-colData(dds)
+#heatmap...  
+  ha<-HeatmapAnnotation(df=profile_coll[,c(3,6),drop=F],col=list(timepoint=c("PRE"="red","SURG"="blue"),path=c("non_pCR"="orange","pCR"="green")))
+  Heatmap(heatmap_data,cluster_rows = hr_dend,col=colorRamp2(c(-2,0,2),c("green","black","red")),cluster_columns = vt_dend,
+          top_annotation = ha,name="Expression",row_names_gp = gpar(fontsize=3),row_dend_reorder = F,column_dend_reorder = F)
+  for(an in colnames(profile_coll[,c(3,6),drop=F])) {
+    decorate_annotation(an, {
+      grid.text(an, unit(1, "npc") + unit(2, "mm"), 0.5, default.units = "npc", just = "left")
+    })
+  }
+}
+
 
 
 
@@ -94,6 +142,7 @@ expression<-aggregate(.~gene_id+gene_name,data=expression,sum)
 rownames(expression)<-expression$gene_id
 expression<-expression[,-1]
 expression$gene_name<-sapply(expression$gene_name,function(x) trim(x))
+colnames(expression)<-sapply(colnames(expression),function(x) gsub("X","",x))
 
 
 #read protein coding RNA list from protein coding RNA.csv
@@ -188,7 +237,10 @@ for(an in colnames(nonpCR_profile_coll[,c(3,6),drop=F])) {
   })
 }
 
-data_t<-t(scale(t(heatmap_data)))
+hm(nonpCR_pcRNA_expression_included,nonpCR_profile_included,~patient+timepoint,contrast=c("timepoint","PRE","SURG"),
+   "comparision between pre and surg in 97_109_163 nonpCR.csv",
+   "data for comparision between pre and surg in 97_109_163 nonpCR.csv",
+   "sorted data for comparision between pre and surg in 97_109_163 nonpCR.csv")
 
 #comparision with pre and surg of #109,97 and 163
 # also include 109on
