@@ -5,6 +5,10 @@ library(DESeq2)
 library(ComplexHeatmap)
 library(circlize)
 
+
+##test whether there are only unique datapoint in a vector
+##if it is, return true
+##otherwise,return false
 allunique<-function(v){
   if (any(duplicated(v))){
     return(FALSE)
@@ -14,13 +18,16 @@ allunique<-function(v){
   }
 }
 
-
+##trim the string
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 
+##test whether a string ends with a pattern
 endsWith<-function(str,patten){
   ends<-paste(patten,"$",sep='')
   return(grepl(ends,str))
 }
+
+#read data from .txt or .csv
 get_data<-function(...){
   
   file=file.choose()
@@ -34,6 +41,7 @@ get_data<-function(...){
   return(data)
 }
 
+## filter data based on whether datapoint in a column is in a vector 
 selectbycolumnin<-function(df,col,vec){
   col<-substitute(col)
   col<-deparse(col)
@@ -42,6 +50,8 @@ selectbycolumnin<-function(df,col,vec){
   return(df[selected,,drop=F])
 }
 
+
+#Filter data based on the n top genes with most mad
 n_top_genes_with_most_mad<-function(df,n=1000){
   mads<-apply(df,1,mad)
   mads<-sort(mads,decreasing=T)
@@ -50,6 +60,7 @@ n_top_genes_with_most_mad<-function(df,n=1000){
   return(data)
 }
 
+#triple venndiagram of three data
 triplevenn<-function(df1,df2,df3,venn_names,higher=FALSE,lower=FALSE){
   if(higher){
     df1<-df1[df1$log2FoldChange<0,]
@@ -77,6 +88,11 @@ triplevenn<-function(df1,df2,df3,venn_names,higher=FALSE,lower=FALSE){
                    category=category,col=col,cat.col=col)
 }
 
+
+##modified heatmap (no reorder dendrogram)
+##return rloged data
+##return rloged data with the same order as heatmap
+##heatmap
 hm<-function(expression,profile,design,contrast,filename1,filename2,filename3){
 #prepare DESeqdataset from Matrix
     design<-deparse(substitute(design))
